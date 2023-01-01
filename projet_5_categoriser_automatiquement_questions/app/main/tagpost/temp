@@ -1,0 +1,49 @@
+    # Détermination du bag of words (tfidf)
+    #texts = title_body_api['Title_body']
+    texts = pd.concat([post_out, data_for_tfidf['Title_body']])
+    bow_corpus = [dict_bow.doc2bow(text) for text in texts]
+    tfidf = TfidfModel(bow_corpus)
+    bow_tv_ft_ttb = [tfidf[text] for text in bow_corpus]
+    bow_tv_ft_ttb_test = [bow_tv_ft_ttb[0]]
+
+    # Utilisation des modèles préentraînés sur le bag of word (standardscaler et régression logistique)
+    X_test = gensim.matutils.corpus2csc(bow_tv_ft_ttb_test, num_terms=len(dict_bow))
+    X_test = X_test.T.toarray()
+    scaler = load('standardscaler')
+    X_test_std = scaler.transform(X_test)
+    clf = load('modele_reg_log')
+    y_pred_test_proba = clf.predict_proba(X_test_std)
+
+    # Identification des 5 tags prédits
+    y_pred_test_proba_w = y_pred_test_proba.copy()
+    tag_predit = pd.DataFrame()
+    for k in range(len(y_pred_test_proba_w)):
+        for i in range(5):
+            val_max = 0
+            ind = -1
+            for j in range(100):
+                if y_pred_test_proba_w[k, j] > val_max:
+                    val_max = y_pred_test_proba_w[k, j]
+                    ind = j
+            if ind > -1:
+                tag_predit.loc[k, i] = dict_tag[ind]
+                y_pred_test_proba_w[k, ind] = 0
+    tag_predit['List_tags'] = tag_predit[0] + ' ' + tag_predit[1] + \
+                              ' ' + tag_predit[2] + ' ' + tag_predit[3] + ' ' + tag_predit[4]
+    Tags_out = tag_predit.loc[0]['List_tags']
+
+    # Affichage du template de résultat
+    return render_template('resultat.html', Title=title_in, Post=post_in,
+                           Tags=Tags_out)
+
+
+cvect = CountVectorizer(stop_words='english', preprocessor=' '.join)
+cv_fit = cvect.fit(df)
+cv_transform = cvect.transform(df)
+ft_cv = cv_fit.get_feature_names_out()
+cv_data = pd.DataFrame.sparse.from_spmatrix(cv_transform, columns=ft_cv)
+#Prediction
+prediction_cv_format = best_model.predict(cv_data)
+prediction_tag  = multilabel_binarizer.inverse_transform(prediction_cv_format)
+print("Predicted:", prediction_tag[0:5]) # CHANGE WITH NAME OF THE COLUMNS WITH THE TAGS!
+print("True:", df[0:5])
